@@ -1,3 +1,36 @@
+# DinoHoi4Modding Bug Fix 
+I am not affiliated with ANKA at all, I wanted to fix bugs that happen, if there is any more bugs ill try my best to fix them, I do not plan to fully develop this
+I fixed issues with states
+I fixed issues with how slow it functions (added background threads to speedup navigation)
+Added a .anka to save projects
+-# If the original mod folder is missing, ANKA can restore the project into another folder.
+added a .hmb if you want to export it to Dinos Hoi4 Mod Builder later.
+Changes the UI slightly
+Bounded background task system with cancellation, cleanup, and header status.
+Shared per-mod cache to avoid repeated disk parsing.
+
+Country scans now run in background workers.
+Focus-tree scans now run in background workers.
+Character scans now run in background workers.
+General dashboard content counts now run in the background.
+Existing map and sprite loading remain asynchronous.
+Loading rows appear immediately instead of freezing the window.
+Stale results are discarded when users switch views quickly.
+Worker failures now display an error instead of remaining stuck on “Loading…”.
+Daemon workers cannot prevent ANKA from closing.
+Tk widgets remain confined to the main thread.
+
+UI changes:
+Removed duplicated ANKA/mod branding from the top bar.
+Added a collapsible navigation button.
+Hiding navigation gives the focus canvas and map editor the whole window.
+Navigation remains grouped and highlights the active editor.
+Page headings and descriptions remain visible.
+
+once downloaded you can run this command in the terminal
+.\.venv\Scripts\python.exe main.py
+
+
 # ANKA — Hearts of Iron IV Mod Editor
 
 ANKA is a free, open-source desktop editor for **Hearts of Iron IV** mods. It replaces
