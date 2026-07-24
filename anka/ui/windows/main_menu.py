@@ -23,7 +23,7 @@ _LINKS = (
      "https://www.youtube.com/@-veselator2599"),
     ("kofi.png", "menu.hint.kofi", "https://ko-fi.com/veselatorl"),
     ("github.png", "menu.hint.github",
-     "https://github.com/Veselator/ANKA_HOI4_mod_editor"),
+     "https://github.com/DinoJakeYT/DINO-ANKA_HOI4_mod_editor"),
 )
 _LINK_ICON_SIZE = (36, 36)
 
@@ -55,6 +55,11 @@ class MainMenuScreen(ttk.Frame):
             edit.state(["disabled"])
             ttk.Label(center, text=t("menu.paths_required"), style="Muted.TLabel").pack(pady=(2, 6))
 
+        open_project = ttk.Button(
+            center, text=t("project.open"), style="Menu.TButton",
+            width=26, command=self.app.open_anka_project)
+        open_project.pack(pady=6, ipadx=4)
+
         settings = ttk.Button(center, text=t("menu.settings"), style="Menu.TButton",
                               width=26, command=self.app.show_settings)
         settings.pack(pady=6, ipadx=4)
@@ -70,6 +75,13 @@ class MainMenuScreen(ttk.Frame):
         self._bind_hint(quit_btn, "menu.hint.exit")
 
         self._place_links(center, p)
+        fork_label = ttk.Label(
+            center, text=t("menu.dino_fix"),
+            style="Muted.TLabel", cursor="hand2",
+        )
+        fork_label.pack(pady=(10, 0))
+        fork_label.bind("<Button-1>", lambda _e: webbrowser.open(
+            "https://dinojakeyt.itch.io/hoi4-mod-builder"))
         self._place_hint_area(center, p)
 
     def _place_links(self, parent, p) -> None:

@@ -77,6 +77,11 @@ class ModContext:
     # priority). Empty for a stand-alone mod.
     dependencies: list[Mod] = field(default_factory=list)
 
+    @cached_property
+    def runtime(self):
+        from ..services.runtime import ModRuntime
+        return ModRuntime()
+
     @property
     def dependency_paths(self) -> list[Path]:
         return [d.path for d in self.dependencies]

@@ -16,7 +16,9 @@ from tkinter import messagebox, ttk
 
 from ...core.pdx import Block, Pair, dumps
 from ...core.pdx import parse as pdx_parse
-from ...services.focus_service import Focus, FocusService, FocusTreeRef
+from ...services.focus_service import (
+    Focus, FocusService, FocusTreeRef, default_focus_name,
+)
 from ..base import EditorModule, EditorRegistry
 from ..common.commands import Command, CommandStack
 from .canvas import ZOOM_STEPS, CanvasModel, CanvasNode, FocusCanvas
@@ -76,6 +78,7 @@ class FocusesEditor(EditorModule):
         # shared per-mod resolver is warmed once in the background so opening a
         # tree never blocks on it.
         self._resolver_ready = context.warm_sprites()
+        self._reload_generation = 0
 
     def resolver_ready(self) -> bool:
         return self._resolver_ready.is_set()
@@ -125,15 +128,15 @@ class FocusesEditor(EditorModule):
         self._inspector_panel = side
         self.inspector = FocusInspector(side, self)
         self.inspector.grid(row=0, column=0, sticky="nsew")
-        side.columnconfigure(0, minsize=330)
+        side.columnconfigure(0, minsize=380)
 
         self._reload_list()
         self._show_placeholder()
         return root
 
     def _build_toolbar(self, root) -> None:
-        bar = ttk.Frame(root, style="TFrame")
-        bar.grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, 8))
+        bar = ttk.Frame(root, style="Card.TFrame", padding=(10, 8))
+        bar.grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, 10))
 
         self._btn_trees = ttk.Button(bar, text="☰ " + self.t("focuses.panel.trees"),
                                      command=self._toggle_list)
@@ -198,8 +201,8 @@ class FocusesEditor(EditorModule):
         self._list.heading("#0", text=self.t("focuses.col.tree"))
         self._list.heading("country", text=self.t("focuses.col.country"))
         self._list.heading("count", text="#")
-        self._list.column("#0", width=170)
-        self._list.column("country", width=55, anchor="center")
+        self._list.column("#0", width=195)
+        self._list.column("country", width=62, anchor="center")
         self._list.column("count", width=42, anchor="e")
         self._list.grid(row=2, column=0, sticky="nsew")
         sb = ttk.Scrollbar(panel, orient="vertical", command=self._list.yview)
@@ -273,8 +276,34 @@ class FocusesEditor(EditorModule):
 
     # --------------------------------------------------------------- tree list
     def _reload_list(self) -> None:
-        self._refs = self.service.list_trees(include_vanilla=self._vanilla.get())
-        self._refresh_list()
+        self._reload_generation += 1
+        generation = self._reload_generation
+        include_vanilla = self._vanilla.get()
+        self._list.delete(*self._list.get_children())
+        self._list.insert("", "end", iid="__loading__", text="Loading…")
+
+        def show(refs) -> None:
+            if generation != self._reload_generation:
+                return
+            self._refs = refs
+            self._refresh_list()
+
+        def failed(exc: Exception) -> None:
+            if generation != self._reload_generation:
+                return
+            self._list.delete(*self._list.get_children())
+            self._list.insert(
+                "", "end", text=f"{self.t('common.error')}: {exc}")
+
+        self.services.tasks.submit_tk(
+            self._list, "Load focus trees",
+            lambda: self.services.cache.get(
+                "focuses", include_vanilla,
+                lambda: self.service.list_trees(
+                    include_vanilla=include_vanilla)),
+            show,
+            failed,
+        )
 
     def _refresh_list(self) -> None:
         query = self._search.get().strip().lower()
@@ -292,7 +321,7 @@ class FocusesEditor(EditorModule):
 
     def _on_pick_tree(self, _event=None) -> None:
         sel = self._list.selection()
-        if not sel:
+        if not sel or sel[0] == "__loading__":
             return
         ref = self._refs[int(sel[0])]
         if self._ref is not None and ref.path == self._ref.path:
@@ -328,6 +357,7 @@ class FocusesEditor(EditorModule):
         self.canvas.set_model(CanvasModel(), keep_view=False)
 
     def _new_tree(self) -> None:
+        self.services.cache.invalidate("focuses")
         from ...services.country_service import CountryService
         tags = [r.tag for r in CountryService(self.context).list_tags(include_vanilla=True)]
 
@@ -343,6 +373,7 @@ class FocusesEditor(EditorModule):
         NewTreeDialog(self.canvas, self, tags, submit)
 
     def _copy_to_mod(self) -> None:
+        self.services.cache.invalidate("focuses")
         if self._ref is None or not self._ref.is_vanilla:
             return
         ref = self.service.copy_to_mod(self._ref)
@@ -351,6 +382,7 @@ class FocusesEditor(EditorModule):
         self._open(ref)
 
     def _delete_tree(self) -> None:
+        self.services.cache.invalidate("focuses")
         sel = self._list.selection()
         if not sel:
             return
@@ -521,6 +553,8 @@ class FocusesEditor(EditorModule):
 
         def submit(fid: str, kind: str) -> None:
             focus = self.service.add_focus(doc, kind, fid=fid, x=cell[0], y=cell[1])
+            self.service.set_focus_loc(
+                fid, self.loc_language, default_focus_name(fid), "")
             self.mark_dirty()
             self.refresh_canvas()
             self._validate()
@@ -564,6 +598,8 @@ class FocusesEditor(EditorModule):
                 self._doc, kind, fid=fid,
                 x=cell[0] - base[0], y=cell[1] - base[1],
                 relative_to=parent_id, prerequisite=parent_id)
+            self.service.set_focus_loc(
+                fid, self.loc_language, default_focus_name(fid), "")
             self.mark_dirty()
             self.refresh_canvas()
             self._validate()
@@ -1062,6 +1098,7 @@ class FocusesEditor(EditorModule):
             state="normal" if self._history.can_redo() else "disabled")
 
     def _save(self) -> None:
+        self.services.cache.invalidate("focuses")
         if self._doc is None or not self._dirty or not self._editable:
             return
         try:

@@ -17,6 +17,7 @@ from ..config.settings import SettingsService
 from ..domain.mod import ModContext
 from ..ui.i18n import Translator
 from ..ui.theme import Palette, ThemeManager
+from ..services.runtime import SharedCache, TaskManager
 
 
 @dataclass
@@ -26,6 +27,8 @@ class EditorServices:
     t: Translator
     theme: ThemeManager
     settings: SettingsService
+    cache: SharedCache
+    tasks: TaskManager
 
 
 class EditorModule(ABC):

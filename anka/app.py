@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import gc
 import tkinter as tk
-from tkinter import ttk
+from pathlib import Path
+from tkinter import filedialog, messagebox, ttk
 
 from PIL import Image, ImageTk
 
@@ -55,7 +56,8 @@ class AnkaApp:
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         # First launch (no settings.json yet): go straight to Settings so the user
         # configures the game / mod paths before anything else.
-        if self.settings.is_first_run:
+        if self.settings.is_first_run and \
+                not self.settings.current.paths_configured:
             self.show_settings(first_run=True)
         else:
             self.show_main_menu()
@@ -122,6 +124,29 @@ class AnkaApp:
             self.show_mod_list()      # don't leave the user stuck on the loader
             raise
         self._swap(screen)
+
+    def open_anka_project(self) -> None:
+        from .services.project_exchange import load_anka, mod_from_anka, restore_anka
+        filename = filedialog.askopenfilename(
+            parent=self.root, title=self.t("project.open"),
+            filetypes=[("ANKA project", "*.anka"), ("All files", "*.*")])
+        if not filename:
+            return
+        try:
+            payload = load_anka(Path(filename))
+            try:
+                mod = mod_from_anka(payload)
+            except FileNotFoundError:
+                destination = filedialog.askdirectory(
+                    parent=self.root, title=self.t("project.restore_folder"))
+                if not destination:
+                    return
+                mod = restore_anka(payload, Path(destination))
+            self.show_mod_editor(mod)
+        except Exception as exc:
+            messagebox.showerror(
+                self.t("common.error"), self.t("project.open_failed", error=exc),
+                parent=self.root)
 
     def _show_loading_screen(self, mod_name: str) -> "_LoadingScreen":
         screen = _LoadingScreen(self.root, self, mod_name)

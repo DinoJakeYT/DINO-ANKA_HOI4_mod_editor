@@ -11,7 +11,8 @@ in a dependency, which in turn wins over the base game.
 """
 from __future__ import annotations
 
-from tkinter import ttk
+from pathlib import Path
+from tkinter import filedialog, messagebox, ttk
 
 from ...services.mod_repository import ModRepository
 from ...ui.widgets import ScrollableFrame
@@ -85,6 +86,21 @@ class GeneralEditor(EditorModule):
         self._summary = ttk.Label(body, text=t("general.counting"),
                                   style="CardMuted.TLabel", justify="left")
         self._summary.grid(row=r, column=0, columnspan=2, sticky="w"); r += 1
+        ttk.Separator(body).grid(row=r, column=0, columnspan=2, sticky="ew",
+                                 pady=12); r += 1
+        ttk.Label(body, text=t("project.section"),
+                  style="Heading.TLabel").grid(
+            row=r, column=0, columnspan=2, sticky="w", pady=(0, 6)); r += 1
+        actions = ttk.Frame(body, style="Card.TFrame")
+        actions.grid(row=r, column=0, columnspan=2, sticky="w"); r += 1
+        ttk.Button(actions, text=t("project.save_anka"),
+                   command=self._save_anka).pack(side="left")
+        ttk.Button(actions, text=t("project.export_hmb"),
+                   command=self._export_hmb).pack(side="left", padx=(8, 0))
+        self._project_status = ttk.Label(
+            body, text="", style="CardMuted.TLabel")
+        self._project_status.grid(
+            row=r, column=0, columnspan=2, sticky="w", pady=(6, 0)); r += 1
         # defer the (cheap but disk-touching) counts so the tab paints instantly
         outer.after(50, self._fill_summary)
         return outer
@@ -151,33 +167,85 @@ class GeneralEditor(EditorModule):
         self._render_deps()
 
     def _fill_summary(self) -> None:
-        t = self.t
-        lines: list[str] = []
-        try:
-            from ...services.country_service import CountryService
-            n = len(CountryService(self.context).list_tags(include_vanilla=False))
-            lines.append(t("general.count.countries", count=n))
-        except Exception:
-            pass
-        try:
-            from ...services.idea_service import IdeaService
-            svc = IdeaService(self.context)
-            n = sum(len(v) for ref in svc.list_docs(False)
-                    for v in ref.categories.values())
-            lines.append(t("general.count.ideas", count=n))
-        except Exception:
-            pass
-        try:
-            from ...services.event_service import EventService
-            n = sum(len(ref.events) for ref in EventService(self.context).list_docs(False))
-            lines.append(t("general.count.events", count=n))
-        except Exception:
-            pass
-        try:
-            from ...services.decision_service import DecisionService
-            n = sum(len(ids) for ref in DecisionService(self.context).list_docs(False, "decisions")
+        def count_content() -> dict[str, int]:
+            counts: dict[str, int] = {}
+            try:
+                from ...services.country_service import CountryService
+                counts["countries"] = len(
+                    CountryService(self.context).list_tags(include_vanilla=False))
+            except Exception:
+                pass
+            try:
+                from ...services.idea_service import IdeaService
+                svc = IdeaService(self.context)
+                counts["ideas"] = sum(len(v) for ref in svc.list_docs(False)
+                                      for v in ref.categories.values())
+            except Exception:
+                pass
+            try:
+                from ...services.event_service import EventService
+                counts["events"] = sum(
+                    len(ref.events)
+                    for ref in EventService(self.context).list_docs(False))
+            except Exception:
+                pass
+            try:
+                from ...services.decision_service import DecisionService
+                counts["decisions"] = sum(
+                    len(ids)
+                    for ref in DecisionService(self.context).list_docs(False, "decisions")
                     for ids in ref.categories.values())
-            lines.append(t("general.count.decisions", count=n))
-        except Exception:
-            pass
-        self._summary.configure(text="\n".join(lines) or t("common.none"))
+            except Exception:
+                pass
+            return counts
+
+        def show(counts: dict[str, int]) -> None:
+            lines = [self.t(f"general.count.{key}", count=value)
+                     for key, value in counts.items()]
+            self._summary.configure(
+                text="\n".join(lines) or self.t("common.none"))
+
+        self.services.tasks.submit_tk(
+            self._summary, "Count mod content",
+            lambda: self.services.cache.get(
+                "general", "content-counts", count_content),
+            show,
+            lambda exc: self._summary.configure(
+                text=f"{self.t('common.error')}: {exc}"),
+        )
+
+    def _save_anka(self) -> None:
+        filename = filedialog.asksaveasfilename(
+            parent=self._project_status, title=self.t("project.save_anka"),
+            defaultextension=".anka",
+            initialfile=f"{self.context.mod.id}.anka",
+            filetypes=[("ANKA project", "*.anka")])
+        if filename:
+            self._run_project_task("Save ANKA project", Path(filename), "anka")
+
+    def _export_hmb(self) -> None:
+        filename = filedialog.asksaveasfilename(
+            parent=self._project_status, title=self.t("project.export_hmb"),
+            defaultextension=".hmb",
+            initialfile=f"{self.context.mod.id}.hmb",
+            filetypes=[("HOI4 Mod Builder project", "*.hmb")])
+        if filename:
+            self._run_project_task("Export HMB project", Path(filename), "hmb")
+
+    def _run_project_task(self, name: str, destination: Path, kind: str) -> None:
+        from ...services.project_exchange import export_hmb, save_anka
+        operation = save_anka if kind == "anka" else export_hmb
+        self._project_status.configure(text=self.t("project.working"))
+
+        def done(_payload: dict) -> None:
+            self._project_status.configure(
+                text=self.t("project.saved", path=destination))
+
+        def failed(exc: Exception) -> None:
+            self._project_status.configure(text=self.t("project.failed"))
+            messagebox.showerror(
+                self.t("common.error"), str(exc), parent=self._project_status)
+
+        self.services.tasks.submit_tk(
+            self._project_status, name,
+            lambda: operation(self.context, destination), done, failed)

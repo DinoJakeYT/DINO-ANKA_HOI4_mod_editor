@@ -35,6 +35,13 @@ FOCUS_SCRIPT_FIELDS = (
     "select_effect", "completion_reward", "complete_tooltip", "ai_will_do",
 )
 
+
+def default_focus_name(fid: str) -> str:
+    """Readable, editable localisation for a newly-created focus id."""
+    words = [word for word in fid.replace("-", "_").split("_") if word]
+    return " ".join(word if word.isupper() else word[:1].upper() + word[1:]
+                    for word in words) or fid
+
 DEFAULT_FOCUS_COST = 10.0
 DAYS_PER_COST = 7
 

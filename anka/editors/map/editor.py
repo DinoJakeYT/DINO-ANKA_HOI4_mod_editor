@@ -31,7 +31,7 @@ from ...ui.widgets import enable_form_wheel
 from .canvas import MapCanvas
 from .commands import (TOUCH_DEFS, TOUCH_STATES, TOUCH_ZONES, CommandStack,
                        CompoundCommand, CreateDefCommand, LayerPixelsCommand,
-                       PixelsCommand, SetDefCommand, StateDocsCommand,
+                       PixelsCommand, RemoveDefCommand, SetDefCommand, StateDocsCommand,
                        StateProvincesCommand, ZoneMembersCommand)
 from .inspector import BatchStateInspector, ProvinceInspector, StateInspector
 
@@ -2034,9 +2034,36 @@ class MapEditor(EditorModule):
                                   for c in result.deltas])
             children.append(PixelsCommand(ys, xs, old, new))
 
+        prov_state, _ = self.map._political_maps()
+
+        # A smaller regenerated area can consume some selected source provinces
+        # completely. Remove those ids from their states before dropping their
+        # definition rows; leaving either reference behind makes HOI4 crash.
+        orphan_defs = [self.map.by_id[p] for p in result.orphaned
+                       if p in self.map.by_id]
+        orphan_set = set(result.orphaned)
+        if orphan_set:
+            for sid in sorted({prov_state.get(p) for p in orphan_set
+                               if prov_state.get(p) is not None}):
+                ref = self.states.doc_ref_for(sid)
+                if ref is None:
+                    continue
+                if ref.is_vanilla:
+                    ref = self.states.copy_to_mod(ref)
+                doc = self._dirty_docs.get(str(ref.path)) or self.states.load(ref)
+                if doc.state is None:
+                    continue
+                old_provinces = list(doc.state.provinces)
+                new_provinces = [p for p in old_provinces if p not in orphan_set]
+                if new_provinces != old_provinces:
+                    doc.state.set_provinces(new_provinces)
+                    children.append(StateProvincesCommand(
+                        sid, old_provinces, new_provinces))
+                    self.mark_dirty(doc)
+                    self.states.refresh_info(doc)
+
         # Keep invariant "every land province belongs to exactly one state":
         # offer to add each new province to its donor's state.
-        prov_state, _ = self.map._political_maps()
         by_state: dict[int, list[int]] = {}
         for nid, donor in donor_of.items():
             sid = prov_state.get(donor)
@@ -2067,12 +2094,15 @@ class MapEditor(EditorModule):
                     self.state_inspector.refresh_provinces_view()
         # Strategic regions must stay consistent: new provinces inherit their
         # donor's region.
-        touched = self.strat_regions.sync_provinces(donor_of, [])
+        touched = self.strat_regions.sync_provinces(donor_of, result.orphaned)
         for zone_doc in touched:
             if zone_doc.zone_id in region_old:
                 children.append(ZoneMembersCommand(
                     "strat_regions", zone_doc.zone_id,
                     region_old[zone_doc.zone_id], list(zone_doc.members)))
+        for d in orphan_defs:
+            self.map.remove_province(d.id)
+            children.append(RemoveDefCommand(d))
         self._record(CompoundCommand(children, "map.cmd.split"))
         self._multi_sel.clear()
         self.map.invalidate_political()

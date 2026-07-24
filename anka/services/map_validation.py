@@ -58,6 +58,21 @@ def validate(map_service, state_service, building_service,
             issues.append(MapIssue("warning", "no_pixels", f"#{d.id}",
                                    {"id": d.id}, "province", d.id))
 
+    # Four different provinces meeting only at one diagonal point form an
+    # invalid X-crossing. Do not flag two-color A/B checkerboards or a repeated
+    # diagonal: both patterns occur in the unmodified vanilla map.
+    codes = map_service.codes
+    if codes.shape[0] > 1 and codes.shape[1] > 1:
+        a, b = codes[:-1, :-1], codes[:-1, 1:]
+        c, d = codes[1:, :-1], codes[1:, 1:]
+        crossings = ((a != b) & (a != c) & (a != d)
+                     & (b != c) & (b != d) & (c != d))
+        count = int(crossings.sum())
+        if count:
+            y, x = (int(v) for v in next(zip(*crossings.nonzero())))
+            issues.append(MapIssue("error", "x_crossing", f"{x},{y}",
+                                   {"count": count, "x": x, "y": y}))
+
     # --- state membership -------------------------------------------------------
     states = state_service.list_states()
     # Contiguous state numbering: HOI4 indexes states by id and crashes on holes.

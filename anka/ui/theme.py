@@ -32,9 +32,9 @@ class Palette:
 
 DARK = Palette(
     name="dark",
-    bg="#1e1f26", surface="#282a36", surface_alt="#31333f", border="#3c3f4c",
-    text="#e8e8ec", text_muted="#9aa0ad",
-    accent="#6c7ae0", accent_text="#ffffff", accent_hover="#828fe8", danger="#e0556c",
+    bg="#0e1117", surface="#161b24", surface_alt="#1d232e", border="#303948",
+    text="#e8ecf3", text_muted="#919db1",
+    accent="#5584ff", accent_text="#ffffff", accent_hover="#7099ff", danger="#f47e87",
 )
 
 LIGHT = Palette(
@@ -71,6 +71,7 @@ class ThemeManager:
         s.configure("TFrame", background=p.bg)
         s.configure("Card.TFrame", background=p.surface, relief="flat")
         s.configure("Sidebar.TFrame", background=p.surface)
+        s.configure("PageHeader.TFrame", background=p.bg)
 
         s.configure("TLabel", background=p.bg, foreground=p.text)
         s.configure("Card.TLabel", background=p.surface, foreground=p.text)
@@ -80,6 +81,12 @@ class ThemeManager:
         s.configure("Heading.TLabel", background=p.surface, foreground=p.text, font=FONT_HEADING)
         s.configure("Muted.TLabel", background=p.bg, foreground=p.text_muted, font=FONT_SMALL)
         s.configure("CardMuted.TLabel", background=p.surface, foreground=p.text_muted, font=FONT_SMALL)
+        s.configure("PageTitle.TLabel", background=p.bg, foreground=p.text,
+                    font=("Segoe UI Semibold", 17))
+        s.configure("PageSubtitle.TLabel", background=p.bg, foreground=p.text_muted,
+                    font=FONT)
+        s.configure("NavSection.TLabel", background=p.surface, foreground="#66758c",
+                    font=("Segoe UI Semibold", 8))
 
         # Buttons
         s.configure("TButton", background=p.surface_alt, foreground=p.text,
@@ -96,22 +103,25 @@ class ThemeManager:
               foreground=[("disabled", p.text_muted)])
 
         # Big, flat sidebar / menu buttons
-        s.configure("Sidebar.TButton", background=p.surface, foreground=p.text,
-                    relief="flat", anchor="w", padding=(10, 8), font=FONT)
+        s.configure("Sidebar.TButton", background=p.surface, foreground=p.text_muted,
+                    relief="flat", anchor="w", padding=(12, 9), font=FONT)
         s.map("Sidebar.TButton", background=[("active", p.surface_alt), ("pressed", p.surface_alt)])
+        s.configure("SidebarActive.TButton", background=p.surface_alt, foreground=p.text,
+                    relief="flat", anchor="w", padding=(12, 9),
+                    font=("Segoe UI Semibold", 10))
 
         s.configure("Menu.TButton", background=p.surface, foreground=p.text,
                     relief="flat", padding=(18, 14), font=FONT_HEADING)
         s.map("Menu.TButton", background=[("active", p.surface_alt), ("pressed", p.accent)])
 
         # Inputs
-        s.configure("TEntry", fieldbackground=p.surface, foreground=p.text,
+        s.configure("TEntry", fieldbackground=p.surface_alt, foreground=p.text,
                     bordercolor=p.border, insertcolor=p.text, padding=6)
         s.map("TEntry", bordercolor=[("focus", p.accent)])
-        s.configure("TCombobox", fieldbackground=p.surface, background=p.surface_alt,
+        s.configure("TCombobox", fieldbackground=p.surface_alt, background=p.surface_alt,
                     foreground=p.text, arrowcolor=p.text, bordercolor=p.border, padding=5)
-        s.map("TCombobox", fieldbackground=[("readonly", p.surface)])
-        s.configure("TSpinbox", fieldbackground=p.surface, background=p.surface_alt,
+        s.map("TCombobox", fieldbackground=[("readonly", p.surface_alt)])
+        s.configure("TSpinbox", fieldbackground=p.surface_alt, background=p.surface_alt,
                     foreground=p.text, arrowcolor=p.text, bordercolor=p.border,
                     insertcolor=p.text, padding=5)
         s.map("TSpinbox", fieldbackground=[("readonly", p.surface)],
@@ -133,7 +143,8 @@ class ThemeManager:
         s.map("Treeview.Heading", background=[("active", p.border)])
 
         s.configure("TNotebook", background=p.bg, bordercolor=p.border)
-        s.configure("TNotebook.Tab", background=p.surface_alt, foreground=p.text_muted, padding=(14, 8))
+        s.configure("TNotebook.Tab", background=p.bg, foreground=p.text_muted,
+                    padding=(16, 10), font=("Segoe UI Semibold", 9))
         s.map("TNotebook.Tab",
               background=[("selected", p.surface)],
               foreground=[("selected", p.text)])

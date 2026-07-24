@@ -132,6 +132,16 @@ class CreateDefCommand(Command):
         editor.map.restore_def(**self.fields)
 
 
+class RemoveDefCommand(CreateDefCommand):
+    """An existing zero-pixel definition removed by area regeneration."""
+
+    def undo(self, editor) -> None:
+        editor.map.restore_def(**self.fields)
+
+    def redo(self, editor) -> None:
+        editor.map.remove_province(self.fields["id"])
+
+
 class StateProvincesCommand(Command):
     """Snapshot swap of one state's ``provinces`` list."""
 

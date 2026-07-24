@@ -4,7 +4,7 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from ...config.settings import Settings
+from ...config.settings import Settings, discover_hoi4_paths
 
 # Native display names of the UI languages (locale code → name).
 _LANG_NAMES = {"en": "English", "ru": "Русский", "uk": "Українська"}
@@ -43,10 +43,13 @@ class SettingsScreen(ttk.Frame):
         self._path_field(card, 0, "game_path", t("settings.game_path"), s.game_path)
         self._path_field(card, 1, "local_mods_path", t("settings.local_mods"), s.local_mods_path)
         self._path_field(card, 2, "workshop_mods_path", t("settings.workshop_mods"), s.workshop_mods_path)
+        ttk.Button(card, text=t("settings.auto_find"),
+                   command=self._auto_find).grid(row=3, column=0, sticky="w",
+                                                  pady=(4, 0))
 
         # Language + theme row
         row = ttk.Frame(card, style="Card.TFrame")
-        row.grid(row=3, column=0, sticky="w", pady=(16, 4))
+        row.grid(row=4, column=0, sticky="w", pady=(16, 4))
 
         ttk.Label(row, text=t("settings.language"), style="CardMuted.TLabel").grid(row=0, column=0, sticky="w")
         # Show native language names, not raw locale codes (unknown codes fall
@@ -68,7 +71,7 @@ class SettingsScreen(ttk.Frame):
 
         # API keys (masked; stored in settings.json — for future AI features)
         keys = ttk.Frame(card, style="Card.TFrame")
-        keys.grid(row=4, column=0, sticky="ew", pady=(16, 0))
+        keys.grid(row=5, column=0, sticky="ew", pady=(16, 0))
         keys.columnconfigure(1, weight=1)
         ttk.Label(keys, text=t("settings.api_keys"), style="Heading.TLabel").grid(
             row=0, column=0, columnspan=3, sticky="w", pady=(0, 6))
@@ -163,6 +166,16 @@ class SettingsScreen(ttk.Frame):
             # Windows: backslashed; Linux/macOS: kept as-is.
             var.set(Settings.normalize_separators(path))
             self._refresh_status()
+
+    def _auto_find(self) -> None:
+        found = discover_hoi4_paths()
+        for key, value in found.items():
+            self._is_ph[key] = False
+            self._vars[key].set(value)
+        self._refresh_status()
+        messagebox.showinfo("ANKA", self.app.t(
+            "settings.auto_find_found" if found else "settings.auto_find_none",
+            count=len(found)))
 
     def _refresh_status(self) -> None:
         probe = Settings(

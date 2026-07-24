@@ -60,6 +60,7 @@ class CountriesEditor(EditorModule):
         self._selected: CountryRef | None = None
         self._color: tuple[int, int, int] | None = None
         self._flag_zones: dict[str | None, ImageDropZone] = {}
+        self._reload_generation = 0
 
     # --- build -----------------------------------------------------------
     def build(self, parent) -> ttk.Widget:
@@ -116,8 +117,8 @@ class CountriesEditor(EditorModule):
             pass
 
     def _build_list(self, root) -> None:
-        left = ttk.Frame(root, style="Card.TFrame", padding=10)
-        left.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        left = ttk.Frame(root, style="Card.TFrame", padding=14)
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 14))
         left.rowconfigure(4, weight=1)
         left.columnconfigure(0, weight=1)
 
@@ -701,11 +702,36 @@ class CountriesEditor(EditorModule):
 
     # --- data flow -------------------------------------------------------
     def _reload(self) -> None:
-        if self._cosmetic_mode:
-            self._refs = self.service.list_cosmetic_tags(include_vanilla=self._vanilla.get())
-        else:
-            self._refs = self.service.list_tags(include_vanilla=self._vanilla.get())
-        self._refresh_list()
+        self._reload_generation += 1
+        generation = self._reload_generation
+        cosmetic = self._cosmetic_mode
+        include_vanilla = self._vanilla.get()
+        self._tree.delete(*self._tree.get_children())
+        self._tree.insert("", "end", iid="__loading__", text="Loading…")
+
+        def load():
+            if cosmetic:
+                return self.service.list_cosmetic_tags(
+                    include_vanilla=include_vanilla)
+            return self.service.list_tags(include_vanilla=include_vanilla)
+
+        def show(refs) -> None:
+            if generation != self._reload_generation:
+                return
+            self._refs = refs
+            self._refresh_list()
+
+        def failed(exc: Exception) -> None:
+            if generation != self._reload_generation:
+                return
+            self._tree.delete(*self._tree.get_children())
+            self._tree.insert("", "end", text=f"{self.t('common.error')}: {exc}")
+
+        key = (cosmetic, include_vanilla)
+        self.services.tasks.submit_tk(
+            self._tree, "Load countries",
+            lambda: self.services.cache.get("countries", key, load),
+            show, failed)
 
     def _refresh_list(self) -> None:
         query = (self._search.get() or "").strip().lower()
@@ -756,24 +782,29 @@ class CountriesEditor(EditorModule):
 
         # history (capital + misc)
         hist = self.service.get_history(ref.tag)
-        self._pol_research.set(hist.get("set_research_slots", ""))
-        self._pol_stability.set(hist.get("set_stability", ""))
-        self._pol_war.set(hist.get("set_war_support", ""))
-        self._pol_manpower.set(hist.get("add_manpower", ""))
+        self._pol_research.set(hist.get("set_research_slots") or "3")
+        self._pol_stability.set(hist.get("set_stability") or "0.5")
+        self._pol_war.set(hist.get("set_war_support") or "0.5")
+        self._pol_manpower.set(hist.get("add_manpower") or "0")
 
         # set_politics block
         politics = self.service.get_politics(ref.tag)
-        self._pol_ruling.set(politics.get("ruling_party", ""))
-        self._pol_last_election.set(politics.get("last_election", ""))
-        self._pol_freq.set(politics.get("election_frequency", ""))
-        self._pol_elections.set((politics.get("elections_allowed", "no") == "yes"))
+        ruling_party = politics.get("ruling_party") or "neutrality"
+        self._pol_ruling.set(ruling_party)
+        self._pol_last_election.set(politics.get("last_election") or "1936.1.1")
+        self._pol_freq.set(politics.get("election_frequency") or "48")
+        default_elections = "yes" if ruling_party == "democratic" else "no"
+        self._pol_elections.set(
+            politics.get("elections_allowed", default_elections) == "yes")
 
         # popularities (dynamic) — re-read the ideology list first: the user
         # may have added/deleted ideologies in the Ideologies editor.
         self._refresh_ideology_lists()
         pops = self.service.get_popularities(ref.tag)
+        remaining_support = max(0, 100 - sum(pops.values()))
         for group, var in self._pop_vars.items():
-            var.set(str(pops.get(group, "")))
+            default = remaining_support if group == ruling_party else 0
+            var.set(str(pops.get(group, default)))
         self._update_pop_sum()
 
         # OOB (land / naval / air)
@@ -1262,6 +1293,8 @@ class CountriesEditor(EditorModule):
 
     # --- delete ----------------------------------------------------------
     def _delete_country(self) -> None:
+        self.services.cache.invalidate("countries")
+        self.services.cache.invalidate("general")
         if not self._selected or self._selected.is_vanilla:
             return
         ref = self._selected
@@ -1288,6 +1321,8 @@ class CountriesEditor(EditorModule):
 
     # --- new country / cosmetic tag --------------------------------------
     def _new_country(self) -> None:
+        self.services.cache.invalidate("countries")
+        self.services.cache.invalidate("general")
         if self._cosmetic_mode:
             existing = {r.tag for r in self.service.list_cosmetic_tags(include_vanilla=True)}
             NewCosmeticTagDialog(self._nb, self, existing)

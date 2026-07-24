@@ -18,6 +18,59 @@ from .constants import Paths
 _IS_WINDOWS = os.name == "nt"
 
 
+def discover_hoi4_paths() -> dict[str, str]:
+    """Find standard Steam/HOI4 folders on Windows without requiring Steam."""
+    if not _IS_WINDOWS:
+        return {}
+    candidates: list[Path] = []
+    try:
+        import winreg
+        for hive, key, name in (
+            (winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam", "SteamPath"),
+            (winreg.HKEY_LOCAL_MACHINE,
+             r"SOFTWARE\WOW6432Node\Valve\Steam", "InstallPath"),
+        ):
+            try:
+                with winreg.OpenKey(hive, key) as handle:
+                    candidates.append(Path(winreg.QueryValueEx(handle, name)[0]))
+            except OSError:
+                pass
+    except ImportError:
+        pass
+    candidates.extend((
+        Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Steam",
+        Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Steam",
+    ))
+    libraries: list[Path] = []
+    for steam in candidates:
+        if steam not in libraries:
+            libraries.append(steam)
+        vdf = steam / "steamapps" / "libraryfolders.vdf"
+        try:
+            text = vdf.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        import re
+        for raw in re.findall(r'"path"\s+"([^"]+)"', text):
+            path = Path(raw.replace(r"\\", "\\"))
+            if path not in libraries:
+                libraries.append(path)
+    found: dict[str, str] = {}
+    for library in libraries:
+        game = library / "steamapps" / "common" / "Hearts of Iron IV"
+        if game.is_dir() and "game_path" not in found:
+            found["game_path"] = str(game)
+            workshop = library / "steamapps" / "workshop" / "content" / "394360"
+            if workshop.is_dir():
+                found["workshop_mods_path"] = str(workshop)
+    documents = Path.home() / "Documents" / "Paradox Interactive" / \
+        "Hearts of Iron IV" / "mod"
+    if documents.is_dir():
+        found["local_mods_path"] = str(documents)
+    return {key: Settings.normalize_separators(value)
+            for key, value in found.items()}
+
+
 @dataclass
 class Settings:
     game_path: str = ""             # Hearts of Iron IV install root
@@ -97,6 +150,7 @@ class SettingsService:
         self._first_run = not self._path.exists()   # no settings.json yet
         self._settings = self._load()
         self._listeners: list[Callable[[Settings], None]] = []
+        self._auto_repair_paths()
 
     @property
     def current(self) -> Settings:
@@ -124,6 +178,26 @@ class SettingsService:
                 if "/" in value:
                     setattr(loaded, key, value.replace("/", "\\"))
         return loaded
+
+    def _auto_repair_paths(self) -> None:
+        """On startup, replace only empty/nonexistent paths we can discover.
+
+        A valid custom Steam library is never overwritten. Persist directly
+        because listeners are not registered yet during construction.
+        """
+        discovered = discover_hoi4_paths()
+        changed = False
+        for key in ("game_path", "local_mods_path", "workshop_mods_path"):
+            current = getattr(self._settings, key)
+            replacement = discovered.get(key)
+            if replacement and (not current or not Path(current).is_dir()):
+                setattr(self._settings, key, replacement)
+                changed = True
+        if changed:
+            self._path.write_text(
+                json.dumps(asdict(self._settings), indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
 
     def save(self, settings: Settings | None = None) -> None:
         if settings is not None:

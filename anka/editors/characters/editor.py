@@ -44,6 +44,7 @@ class CharactersEditor(EditorModule):
         self._portrait_paths: dict[tuple[str, str], Path] = {}   # (category, size)
         self._loading = False
         self._dirty = False
+        self._reload_generation = 0
 
     # --- build -----------------------------------------------------------
     def build(self, parent) -> ttk.Widget:
@@ -219,12 +220,36 @@ class CharactersEditor(EditorModule):
     # --- list ------------------------------------------------------------
     def _reload(self) -> None:
         # Shared, incrementally-maintained cache — no rescan needed for in-app edits.
-        all_models = self.service.all_characters()
-        if self._vanilla.get():
-            self._models = sorted(all_models, key=lambda m: m.char_id)
-        else:
-            self._models = sorted([m for m in all_models if m.in_mod], key=lambda m: m.char_id)
-        self._refresh_list()
+        self._reload_generation += 1
+        generation = self._reload_generation
+        include_vanilla = self._vanilla.get()
+        self._tree.delete(*self._tree.get_children())
+        self._tree.insert("", "end", iid="__loading__",
+                          text="Loading…", values=("",))
+
+        def load():
+            models = self.service.all_characters()
+            if not include_vanilla:
+                models = [m for m in models if m.in_mod]
+            return sorted(models, key=lambda m: m.char_id)
+
+        def show(models) -> None:
+            if generation != self._reload_generation:
+                return
+            self._models = models
+            self._refresh_list()
+
+        def failed(exc: Exception) -> None:
+            if generation != self._reload_generation:
+                return
+            self._tree.delete(*self._tree.get_children())
+            self._tree.insert("", "end", text=f"{self.t('common.error')}: {exc}")
+
+        self.services.tasks.submit_tk(
+            self._tree, "Load characters",
+            lambda: self.services.cache.get(
+                "characters", include_vanilla, load),
+            show, failed)
 
     def _refresh_list(self) -> None:
         q = self._search.get().strip().lower()
@@ -239,7 +264,7 @@ class CharactersEditor(EditorModule):
 
     def _on_select(self, _e=None) -> None:
         sel = self._tree.selection()
-        if not sel:
+        if not sel or sel[0] == "__loading__":
             return
         model = self.service.get(sel[0])
         if model is None:
@@ -381,6 +406,8 @@ class CharactersEditor(EditorModule):
 
     # --- save / delete ---------------------------------------------------
     def _save(self) -> None:
+        self.services.cache.invalidate("characters")
+        self.services.cache.invalidate("general")
         char_id = self._v_id.get().strip()
         if not _ID_RE.match(char_id):
             return self._fail("characters.invalid_id")
@@ -420,6 +447,8 @@ class CharactersEditor(EditorModule):
         self._status.configure(text=self.t("characters.saved", id=char_id), foreground=self.palette.text_muted)
 
     def _delete(self) -> None:
+        self.services.cache.invalidate("characters")
+        self.services.cache.invalidate("general")
         sel = self._tree.selection()
         if not sel:
             return
