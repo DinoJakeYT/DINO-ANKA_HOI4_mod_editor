@@ -205,7 +205,12 @@ class FocusInspector(ttk.Frame):
         head.grid(row=fr, column=0, columnspan=2, sticky="ew"); fr += 1
         ttk.Label(head, text=self.t("focuses.inspector.prerequisites"),
                   style="Card.TLabel").pack(side="left")
-        ttk.Button(head, text="➕", width=3, command=self._add_prereq_group).pack(side="right")
+        ttk.Button(head, text=self.t("focuses.inspector.add_and"),
+                   command=self._add_prereq_group).pack(side="right")
+        ttk.Label(
+            f, text=self.t("focuses.inspector.prereq_hint"),
+            style="CardMuted.TLabel", wraplength=300, justify="left").grid(
+                row=fr, column=0, columnspan=2, sticky="w", pady=(2, 4)); fr += 1
         self._prereq_box = ttk.Frame(f, style="Card.TFrame")
         self._prereq_box.grid(row=fr, column=0, columnspan=2, sticky="ew"); fr += 1
         self._prereq_box.columnconfigure(0, weight=1)
@@ -430,7 +435,10 @@ class FocusInspector(ttk.Frame):
             row.grid(row=i, column=0, sticky="ew", pady=1)
             row.columnconfigure(0, weight=1)
             join = f"  {self.t('focuses.inspector.or')}  "
-            ttk.Label(row, text=join.join(group), style="CardMuted.TLabel",
+            mode = (self.t("focuses.inspector.any_of")
+                    if len(group) > 1 else self.t("focuses.inspector.requires"))
+            ttk.Label(row, text=f"{mode}: {join.join(group)}",
+                      style="CardMuted.TLabel",
                       wraplength=230).grid(row=0, column=0, sticky="w")
             if self._editable:
                 ttk.Button(row, text="✎", width=3,
@@ -612,7 +620,7 @@ class FocusInspector(ttk.Frame):
             self.owner.refresh_canvas()
 
         options = self.owner.known_id_options(exclude=focus.id)
-        MultiPickDialog(self, self.owner, self.t("focuses.inspector.prerequisites"),
+        MultiPickDialog(self, self.owner, self.t("focuses.inspector.pick_group"),
                         options, picked, preselected=preselected)
 
     def _remove_prereq_group(self, index: int) -> None:

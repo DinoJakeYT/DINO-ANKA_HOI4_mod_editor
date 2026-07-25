@@ -316,8 +316,13 @@ class IconPickerDialog(BaseDialog):
         self._photos: dict[str, ImageTk.PhotoImage] = {}
         # Shine sprites duplicate their base icon (same texture, animation on top) —
         # showing them would double every icon in the gallery.
-        self._names = [n for n in resolver.names(prefixes=prefixes)
-                       if not n.lower().endswith("_shine")]
+        self._all_names = [n for n in resolver.names()
+                           if not n.lower().endswith("_shine")]
+        prefix_lows = tuple(prefix.lower() for prefix in prefixes)
+        self._family_names = [
+            name for name in self._all_names
+            if name.lower().startswith(prefix_lows)]
+        self._names = self._family_names
         self._matches: list[str] = []
         self._shown = 0
         self._appending = False
@@ -335,6 +340,12 @@ class IconPickerDialog(BaseDialog):
         ttk.Entry(top, textvariable=self._search).grid(row=0, column=0, sticky="ew")
         ttk.Label(top, text=current, style="CardMuted.TLabel").grid(
             row=0, column=1, padx=(10, 0))
+        self._show_all = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            top, text=self.t("focuses.all_game_sprites"),
+            variable=self._show_all, style="Card.TCheckbutton",
+            command=self._toggle_sprite_family).grid(
+                row=1, column=0, columnspan=2, sticky="w", pady=(5, 0))
 
         canvas_wrap = ttk.Frame(body, style="Card.TFrame")
         canvas_wrap.grid(row=1, column=0, sticky="nsew")
@@ -373,6 +384,10 @@ class IconPickerDialog(BaseDialog):
                             variable=self._keep_size).pack(side="right", padx=8)
         ttk.Button(bottom, text=self.t("common.cancel"),
                    command=self.destroy).pack(side="right", padx=8)
+        self._refresh()
+
+    def _toggle_sprite_family(self) -> None:
+        self._names = self._all_names if self._show_all.get() else self._family_names
         self._refresh()
 
     def _refresh(self) -> None:

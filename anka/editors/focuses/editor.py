@@ -987,6 +987,12 @@ class FocusesEditor(EditorModule):
             if getattr(self, "_event_service", None) is None:
                 self._event_service = EventService(self.context)
             return self._event_service.event_options()
+        if vtype == "idea":
+            # Ideas/spirits can be created in another already-open editor tab.
+            # Re-read this lightweight list so add_ideas immediately sees them.
+            from ...services.idea_service import IdeaService
+            return [(f"{idea.id} · {idea.category}", idea.id)
+                    for idea in IdeaService(self.context).list_ideas()]
         cached = self._value_options.get(vtype)
         if cached is not None:
             return cached
@@ -999,10 +1005,6 @@ class FocusesEditor(EditorModule):
             from ...services.state_service import StateService
             for st in StateService(self.context).list_states():
                 opts.append((f"{st.id} · {st.name}", str(st.id)))
-        elif vtype == "idea":
-            from ...services.idea_service import IdeaService
-            for idea in IdeaService(self.context).list_ideas():
-                opts.append((f"{idea.id} · {idea.category}", idea.id))
         elif vtype == "focus":
             for fid in self.service.focus_ids():
                 opts.append((fid, fid))

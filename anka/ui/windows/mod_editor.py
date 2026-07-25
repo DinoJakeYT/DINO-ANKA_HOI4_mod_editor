@@ -174,24 +174,24 @@ class ModEditorScreen(ttk.Frame):
         return next((m for m in self._modules if m.id == self._active), None)
 
     def on_leave(self) -> None:
-        """Flush the active editor module's pending edits when leaving the editor."""
-        self._flush_active()
-        self.context.runtime.tasks.shutdown(wait=False)
-
-    def _flush_active(self) -> None:
-        active = self._active_module()
-        if active is not None:
-            hook = getattr(active, "on_leave", None)
+        """Flush every opened module only when the mod editor itself closes."""
+        for module in self._modules:
+            if module.id not in self._built:
+                continue
+            hook = getattr(module, "on_leave", None)
             if callable(hook):
                 try:
                     hook()
                 except Exception:
                     pass
+        self.context.runtime.tasks.shutdown(wait=False)
 
     def _select(self, module) -> None:
         if self._active == module.id:
             return
-        self._flush_active()  # auto-save the module we're leaving
+        # Built editors remain alive and retain their unsaved form state. Saving
+        # and full validation can touch hundreds of files, so doing it on every
+        # navigation click made tab switching feel like reopening the editor.
         for w in self._built.values():
             w.grid_remove()
         widget = self._built.get(module.id)
@@ -201,14 +201,6 @@ class ModEditorScreen(ttk.Frame):
             self._built[module.id] = widget
         else:
             widget.grid()
-            # Re-shown editor: give it a chance to re-read data another editor
-            # may have changed meanwhile (e.g. ideologies added/deleted).
-            hook = getattr(module, "on_enter", None)
-            if callable(hook):
-                try:
-                    hook()
-                except Exception:
-                    pass
         self._active = module.id
         self._page_title.configure(text=module.title)
         self._page_subtitle.configure(text=module.description)

@@ -12,6 +12,7 @@ also wires the politics-view GUI/GFX.
 """
 from __future__ import annotations
 
+import re
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -93,6 +94,8 @@ class IdeasEditor(EditorModule):
         self._btn_list.pack(side="left")
         ttk.Button(bar, text="➕ " + self.t("ideas.new_idea"),
                    command=self._new_idea).pack(side="left", padx=4)
+        ttk.Button(bar, text="★ " + self.t("ideas.new_national_spirit"),
+                   command=self._new_national_spirit).pack(side="left", padx=2)
         ttk.Button(bar, text="🗂 " + self.t("ideas.new_category"),
                    command=self._new_category).pack(side="left", padx=2)
         ttk.Button(bar, text="💾 " + self.t("common.save"),
@@ -101,6 +104,9 @@ class IdeasEditor(EditorModule):
                                     command=self._copy_to_mod)
         self._btn_problems = ttk.Button(bar, text="⚠ 0", command=self._toggle_problems)
         self._btn_problems.pack(side="right")
+        ttk.Label(
+            bar, text=self.t("ideas.grant_hint"),
+            style="Muted.TLabel").pack(side="right", padx=12)
 
     def _build_list_panel(self, root) -> None:
         panel = ttk.Frame(root, style="Card.TFrame", padding=10)
@@ -331,6 +337,7 @@ class IdeasEditor(EditorModule):
                 self._create_from(doc, category, iid, base_id)
             else:
                 self.service.add_idea(doc, category, iid)
+            self._ensure_new_idea_loc(iid)
             if all(d.ref.path != doc.ref.path for d in self._mod_docs):
                 self._mod_docs.append(doc)
             self.mark_dirty(doc)
@@ -342,6 +349,35 @@ class IdeasEditor(EditorModule):
                 self._tree.see(node)
 
         NewIdeaDialog(self._tree, self, submit, taken, choices, base_options)
+
+    def _new_national_spirit(self) -> None:
+        """Create a national spirit in HOI4's built-in `country` category."""
+        taken = set(self.known_ids())
+
+        def submit(iid: str) -> None:
+            doc = self.service.mod_target_doc("country")
+            self.service.add_idea(doc, "country", iid)
+            self._ensure_new_idea_loc(iid)
+            if all(d.ref.path != doc.ref.path for d in self._mod_docs):
+                self._mod_docs.append(doc)
+            self.mark_dirty(doc)
+            self.save_all()
+            self.reload_tree()
+            node = f"i::{doc.ref.rel_file}::{iid}"
+            if self._tree.exists(node):
+                self._tree.selection_set(node)
+                self._tree.see(node)
+
+        TextPromptDialog(
+            self._tree, self, self.t("ideas.new_national_spirit"),
+            self.t("ideas.idea_id"), submit, taken=taken)
+
+    def _ensure_new_idea_loc(self, iid: str) -> None:
+        if not self.service.has_any_name(iid, self.loc_language):
+            human_name = re.sub(r"[_-]+", " ", iid).strip().title()
+            self.service.set_loc(iid, self.loc_language, human_name, "")
+            if self.loc_language != "english":
+                self.service.set_loc(iid, "english", human_name, "")
 
     def _create_from(self, doc, category: str, new_id: str, base_id: str) -> None:
         """Clone an existing idea into ``new_id`` and copy its localisation onto
