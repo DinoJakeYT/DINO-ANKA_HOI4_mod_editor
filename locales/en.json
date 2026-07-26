@@ -608,6 +608,7 @@
   "ideas.new_idea": "New idea",
   "ideas.new_national_spirit": "New national spirit",
   "ideas.grant_hint": "To grant a spirit: add_ideas = spirit_id in a focus reward or country history.",
+  "modlist.open_failed": "Could not open \"{name}\".\n\n{error}\n\nCheck that the mod folder still exists and try again.",
   "ideas.new_category": "New category",
   "ideas.idea_id": "Idea ID",
   "ideas.base_idea": "Base idea (copy from)",

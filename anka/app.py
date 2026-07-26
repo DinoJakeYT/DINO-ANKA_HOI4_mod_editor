@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import gc
 import tkinter as tk
+import traceback
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
@@ -120,9 +121,17 @@ class AnkaApp:
         loading = self._show_loading_screen(mod.name)
         try:
             screen = ModEditorScreen(self.root, self, mod, progress=loading.step)
-        except Exception:
-            self.show_mod_list()      # don't leave the user stuck on the loader
-            raise
+        except Exception as exc:
+            # A malformed mod must not look like a dead Edit button.  Return to
+            # the list and show an actionable error instead of only writing a
+            # traceback to the terminal window most users never see.
+            self.show_mod_list()
+            detail = "".join(traceback.format_exception_only(type(exc), exc)).strip()
+            messagebox.showerror(
+                self.t("common.error"),
+                self.t("modlist.open_failed", name=mod.name, error=detail),
+                parent=self.root,
+            )
         self._swap(screen)
 
     def open_anka_project(self) -> None:

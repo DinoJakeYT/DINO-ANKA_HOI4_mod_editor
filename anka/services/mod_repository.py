@@ -39,6 +39,11 @@ class ModRepository:
 
     # --- local -----------------------------------------------------------
     def _discover_local(self) -> list[Mod]:
+        # `Path("")` means the current working directory.  Treating an empty
+        # optional path that way made ANKA list its own `.git`, `anka`, etc. as
+        # workshop/local mods, which then could not be opened.
+        if not self._settings.local_mods_path.strip():
+            return []
         root = Path(self._settings.local_mods_path)
         if not root.is_dir():
             return []
@@ -110,6 +115,10 @@ class ModRepository:
 
     # --- workshop --------------------------------------------------------
     def _discover_workshop(self) -> list[Mod]:
+        # Workshop mods are optional.  Never turn a blank settings field into
+        # `Path('.')`, otherwise application folders appear as fake mods.
+        if not self._settings.workshop_mods_path.strip():
+            return []
         root = Path(self._settings.workshop_mods_path)
         if not root.is_dir():
             return []
