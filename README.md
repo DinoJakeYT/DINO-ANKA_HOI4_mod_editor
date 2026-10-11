@@ -128,4 +128,4 @@ For architecture details, editor-authoring patterns and contribution notes, see
 
 ## License
 
-See the repository for license information.
+See the repository for license information
